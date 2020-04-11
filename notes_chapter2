@@ -1,0 +1,43 @@
+### Chapter 2 [Exploring the Xen Virtual Architecture] ###
+
+-> Booting as paravirtualized guest
+	- x86 processor brgins in the real mode
+	- Modern OS, on startup, enters into the protected mode and installs interrupt handlers.
+	- When an OS boots inside Xen, its already in protected mode.
+	- Most interrupts installed by Xen, bounced back to guest, for example CPU state ones.
+	- For communicating with hardware, interrupts turned in Xen events, and delivered via an upcall into the domain container driver.
+	- Xen needs to register for clock interrupts, to know when to switch execution to the next VM, also registers some interrupts related to hardware devices, such as keyboard.
+	- Xen: hypercalls bind an event port to a virtual or physical IRQ.
+	- BIOS: Used for disovering HW capabilities and have direct access to hardware. For Xen guests, this is not possible because direct access to hardware => break principle of isolation.
+	- BIOS replaced by:
+		-- start info page: basic info for guest to init kernel
+		-- shared info page: provides some more data, updated when guest is run
+		-- XenStore: more info + which physical/virtual devices are available
+	- I/O overhead less in Xen: 
+		-- HW emulation in full virtualization: guest OS abstract device commands --> device specific commands for virtual device --> emulator converts devie commands to abstract --> then converted to the real physical device.
+		-- Xen removes the convertion from abstract to virtual device commands, by requiring the domU guest to have only one abstract device driver for each category. So convertion avoided.
+		
+
+-> Restricting operations with privilege rings:
+	- Xen runs in ring 0 and runs the kernel in ring 1
+		-- Not always possible: 
+	- In x86 due to limitations, moving OS to higher ring = not being able to execute privileged instructions without a general protection fault (#GP). On x86 silently fails. Responsibility of guest OS to replace them with hypercalls.
+	- When HW-assisted virtualization available - still better to replace with hypercalls for efficiency (else rely on CPU trapping instructions and hypervisor emulating them).
+
+-> Replacing privileged instructions with hypercalls
+	- System call general mechanism:
+		1. Marshal the arguments on register or onto the stack (on some archs).
+		2. Invoke special system call instruction (for example, int 80h). 
+		3. Jump to the kernels privileged interrupt handler.
+		4. Process system call at the kernels privilege.
+		5. Drop to the lower privilege level and return.
+	- Earlier hypercalls on Xen were issued through int 82h, now deprecated. Hypercalls issued via the hypercall page. Hypercalls issued by CALLing an address within this page.
+	- Overhead in system calls: When system call issued, 2 additional context switches: guest to Xen and Xen to kernel. Overhead overcome by using Fast System Calls.
+	- Fast System Calls: Xen installs handlers for int 80h. When system call occurs, Xen handlers by-passed.
+	- If comptability with x86 applications not an issue, can use call gates for transition between ring 3 and ring 1. System calls exposed as function calls using CALL FAR. Mechanism not available in x86, not optimizied in recent x86 CPUs.
+	- Page size on x86 = 4kb = 4096 bytes. Each hypercall entry is 32 bytes. That is 4096/32 = 128 hypercalls at max.
+
+-> Xen event model:
+	- 
+	
+	
