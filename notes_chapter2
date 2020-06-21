@@ -37,7 +37,80 @@
 	- If comptability with x86 applications not an issue, can use call gates for transition between ring 3 and ring 1. System calls exposed as function calls using CALL FAR. Mechanism not available in x86, not optimizied in recent x86 CPUs.
 	- Page size on x86 = 4kb = 4096 bytes. Each hypercall entry is 32 bytes. That is 4096/32 = 128 hypercalls at max.
 
+-> [TODO] Implementation of hypercall.
+
 -> Xen event model:
-	- 
+	- Comparing Xen and Unix:
+			 Unix		|		Xen
+		---------------------------------
+		System calls	|	Hypercalls
+		Signals			|	Events
+		Filesystem		|	XenStore
+		POSIX Shared mem|	Grant tables
+	
+	- Unix uses signal handlers to deliver data to another application,
+		Xen uses events.
+	- Xen: guest kernel registers a callback to be used for event delivery When events are delivered, various flags set to indicate which event has occured. Events may come from Xen itself, as hardware or virtual interrupts or form other guests. Like UNIX signals, can be used to construct more complex async. communications paths (for ex, alloc. an event channel to indicate updation of shared memory page).
+	- Xen event is devlivered via a callback. All upcalls are delivered to the same address (there are two callbacks, one for event delivery, other for faults)
+	- One guest sending async. event to another guest:
+		1. Receiving guest creates a new unbound port.
+		2. Receiving guest advertises the existence of the port (typically via XenStore).				
+		3. The sending guest creates a new port if it does not have any.
+		4. The sending guest binds its port to the remote one.
+		5. The sending guest sends the event.
+		
+	- A guest kernel only receives events that it knows how to handle. (Else might lead to crashes, secure virtualization and isolotation of domain is of prime importance)
+	
+-> Communicating with shared memory:
+	- Xen is minimlaist: provides only shared memory by default
+	- Operations on memory pages in Xen: sharing and transferring:
+		- Shared: both domains can access the page contents
+		- Transfer: message-passing mechanism
+	- No abstraction in presenting idea of a flat, byte-ganularity, address space. Xen guest can only manipulate shared memory on a page level.
+	- Pages are identified via grant reference (integer, like system V). The value of integer is shared between domains using XenStore (like POSIX)
+	- Pages used to transfer data to virtual device drivers typically present in '/local/domain/0/backend/'
+	
+-> Split Device Driver Model
+	- As is with the Xen philosophy, Xen delegates hardware support to guest, through Dom0 (also possible to do with other domains).
+	
+	- Xen device drivers consists of following parts:
+		- The real driver
+		- The bottom half of the split driver
+		- The shared ring buffer(s)
+		- The top half of the split driver
+		 		
+	- When kernel is ported to Xen, interrupt handlers must be ported to Xen events. Due to an abstraction layer, drivers dont generally need to be ported.
+	- [Bottom Half]: Two features: 1) multiplexing 2) generic interface. Multiplexing is to allow multiple guests to use the same device (For ex, socket abstraction for network devices, filesystem for hard disks). Generic interfaces such as for block device: read block and write block. 
+	- [TODO: I did not understand this]: A filesystem abstraction is fine, because each file (on UNIX-like
+systems) is effectively a virtual block device. For networks, the same is not true.
+Exposing a socket interface to guests would require them to rewrite a large portion
+of their networking stack. Fortunately, many operating systems provide lower-level
+services for bridging, routing, and virtual interfaces that can be used for some of
+this. A Xen network driver can be added to the Domain 0 kernel as a virtual
+interface and then existing routing code can be used to handle multiplexing.
+
+	- [Shared Ring Buffers]: Exports features to other guests using a ring DS in the shared memory segment. This is exported via grant table mechanism abd advertised via XenStore. Event channel is also congifured for signalling by both ends when data is waiting inside the segment. Thus to see the available devices, the guests read the XenStore for the available grant table references.
+
+-> The VM lifecycle
+
+	- VM has an additional state- 'paused'
+		
+			stop
+		  -------------------------[PAUSED]
+		  |  --------------------->[PAUSED]
+		  |  |   start (paused)    / \  |
+		  |  |                pause |   |  resume
+		 \ / |   turn on            |  \ /
+		 [OFF]------------------->[RUNNING]<---|
+		 [OFF]<-------------------[RUNNING]----|
+		   / \   turn off           / \  |
+			|                   wake |   |
+   turn off |         |--------------|   | sleep
+			|         |                  |
+		    [SUSPENDED] <----------------|
+		     
+		    
+		  == VM lifecycle ==
+	- 	  
 	
 	
